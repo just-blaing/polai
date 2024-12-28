@@ -7,7 +7,7 @@ import random
 
 discord_token = "тыкните сюда токен бота дс"
 cai_token = "тыкните сюда токен чарактер аи (его можно взять здесь: https://docs.kram.cat/auth.html)"
-id = "3b9jNbV9sxbILv6uGzqw-YyUIPHX06mSAR61Dk5bzPo"
+caiuser_id = "3b9jNbV9sxbILv6uGzqw-YyUIPHX06mSAR61Dk5bzPo"
 user_chats = {}
 message_counter = 0
 intents = disnake.Intents.all()
@@ -19,11 +19,11 @@ async def get_ai_response(user_input, user_id):
     me = await client.get_me()
     if user_id not in user_chats or user_chats[user_id] is None:
         async with await client.connect() as chat:
-            new, _ = await chat.new_chat(id, me.id)
+            new, _ = await chat.new_chat(caiuser_id, me.id)
             user_chats[user_id] = new.chat_id
     chat_id = user_chats[user_id]
     async with await client.connect() as chat:
-        message = await chat.send_message(id, chat_id, user_input)
+        message = await chat.send_message(caiuser_id, chat_id, user_input)
         return message
 
 
