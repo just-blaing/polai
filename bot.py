@@ -1,3 +1,4 @@
+# pip install asyncio disnake characterai
 import asyncio
 import re
 import disnake
