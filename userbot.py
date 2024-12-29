@@ -1,3 +1,4 @@
+# pip install discord.py-self requests characterai asyncio discord
 import discord
 from discord.ext import commands
 import asyncio
