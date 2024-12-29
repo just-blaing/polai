@@ -6,8 +6,8 @@ from disnake.ext import commands
 from characterai import aiocai
 import random
 
-discord_token = "тыкните сюда токен бота дс"
-cai_token = "тыкните сюда токен чарактер аи (его можно взять здесь: https://docs.kram.cat/auth.html)"
+discord_token = "добавьте сюда токен бота дс"
+cai_token = "добавьте сюда токен чарактер аи (его можно взять здесь: https://docs.kram.cat/auth.html)"
 caiuser_id = "3b9jNbV9sxbILv6uGzqw-YyUIPHX06mSAR61Dk5bzPo"
 user_chats = {}
 message_counter = 0
