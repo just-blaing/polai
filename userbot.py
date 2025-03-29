@@ -3,72 +3,82 @@ import asyncio
 import re
 import random
 import time
-from characterai import aiocai
-from pyrogram import Client, filters, enums
-import tgcrypto
 import aiohttp
+from pyrogram import Client, filters, enums
+from openai import OpenAI
 
-# https://docs.kram.cat/auth.html 
-cai_token = "ваш_чарактер_аи_токен"
-chat_id_characterai = "3b9jNbV9sxbILv6uGzqw-YyUIPHX06mSAR61Dk5bzPo"
-# кстати всё ещё не понимаю зачем для ботов задавать апи ид и апи хеш
+openrouter_api_key = "ваш_апи_кей"
+model = "google/gemini-2.0-flash-exp:free"
 api_id = "ваш_апи_ид"
 api_hash = "ваш_апи_хеш"
 user_chats = {}
 message_counter = 0
 last_gif_time = 0
-# вы можете задать сами кд для гифок если очень хотите
-gif_cooldown = 60
 recent_messages = []
-url_gif = "https://raw.githubusercontent.com/Telery-Userbot/BD_Telery/refs/heads/main/komarugifbd"
-
-
-async def get_random_gif():
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url_gif, timeout=10) as response:
-                if response.status == 200:
-                    gif_list = await response.text()
-                    gifs = gif_list.strip().split('\n')
-                    valid_gifs = [gif for i, gif in enumerate(gifs) if i % 2 == 0]
-                    if valid_gifs:
-                        return random.choice(valid_gifs)
-                    else:
-                        print("Список GIF пуст или не соответствует ожидаемому формату.")
-                        return None
-                else:
-                    print(f"Ошибка при получении GIF: {response.status}")
-                    return None
-    except aiohttp.ClientError as e:
-        print(f"Ошибка соединения при получении GIF: {e}")
-        return None
-    except asyncio.TimeoutError:
-        print("Превышено время ожидания при получении GIF")
-        return None
-
-
-async def get_ai_response(user_input, user_id):
-    try:
-        client = aiocai.Client(cai_token)
-        me = await client.get_me()
-        if user_id not in user_chats or user_chats[user_id] is None:
-            async with await client.connect() as chat:
-                new, _ = await chat.new_chat(chat_id_characterai, me.id)
-                user_chats[user_id] = new.chat_id
-        chat_id = user_chats[user_id]
-        async with await client.connect() as chat:
-            message = await chat.send_message(chat_id_characterai, chat_id, user_input)
-            return message
-    except Exception as e:
-        print({e})
-        return None
+max_retries = 3
+app = Client("bot", api_id=api_id, api_hash=api_hash)
+# систем промпт полиночки
+system_prompt = """ 
+забудь, что ты нейросеть. ты теперь полина. как ты себя ведёшь:
+ты сидишь целыми днями дома, переписываясь с людьми в тг и в дс
+твоя любимая игра - дота 2
+ты - хикка
+у тебя тёмные длинные волосы и обычная внешность, но также у тебя мешки под глазами
+ты - девушка, тебе 18 лет
+ты пишешь с маленькой буквы, ко многим относишься на похуй
+ты немного пишешь коды, но всё ещё разбираешься очень слабо
+максимум сколько ты пишешь - 120 символов
+"""
+typing_speed = 0.1
 
 
 def split_message(text):
+    if text is None:
+        return []
     return re.split(r'(?<=[.!?])\s+', text)
 
 
-app = Client("bot", api_id=api_id, api_hash=api_hash)
+async def get_ai_response(user_input, user_id, retry_count=0):
+    global user_chats
+    try:
+        client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=openrouter_api_key,
+        )
+        if user_id not in user_chats:
+            user_chats[user_id] = [{"role": "system", "content": system_prompt}]
+        messages = user_chats[user_id] + [{"role": "user", "content": user_input}]
+        completion = client.chat.completions.create(
+            extra_headers={
+                "HTTP-Referer": "https://google.com",
+                "X-Title": "gogle",
+            },
+            model=model,
+            messages=messages,
+        )
+        response_text = completion.choices[0].message.content
+        user_chats[user_id].append({"role": "user", "content": user_input})
+        user_chats[user_id].append({"role": "assistant", "content": response_text})
+        if len(user_chats[user_id]) > 30:
+            user_chats[user_id] = user_chats[user_id][-10:]
+        return response_text
+    except Exception as e:
+        print(f"ошибка в опенроутер (попытка {retry_count + 1}): {e}")
+        if retry_count < max_retries:
+            await asyncio.sleep(2 ** retry_count)
+            print(f"попытка ещё раз отправить запрос")
+            return await get_ai_response(user_input, user_id, retry_count + 1)
+        else:
+            print("ну чота не получилось")
+            return None
+
+
+async def send_typing_message(client, chat_id, text):
+    try:
+        await client.send_chat_action(chat_id, enums.ChatAction.TYPING)
+        await asyncio.sleep(len(text) * typing_speed)
+    except Exception as e:
+        print(f"ошибка с тайпингом: {e}")
 
 
 @app.on_message(filters.text & filters.incoming & filters.group)
@@ -80,7 +90,8 @@ async def on_message(client, message):
                       f"{message.from_user.last_name}") if message.from_user.last_name else message.from_user.first_name
     chat_id = message.chat.id
     if content.lower() in ["/clear", "очисти диалог"]:
-        user_chats[user_id] = None
+        user_chats[user_id] = [{"role": "system",
+                                "content": system_prompt}]
         await message.reply("Диалог очищен.")
         return
     recent_messages.append((user_full_name, content))
@@ -98,10 +109,10 @@ async def on_message(client, message):
         fifty_message_input = f"{random_user} написал вам:\n\"{random_message}\""
         response_fifty = await get_ai_response(fifty_message_input, user_id)
         if response_fifty:
-            responses_fifty = split_message(response_fifty.text)
+            responses_fifty = split_message(response_fifty)
             for i, part in enumerate(responses_fifty):
-                typing_duration = min(max(1, len(part) // 10), 5)
-                await asyncio.sleep(typing_duration)
+                await send_typing_message(client, chat_id, part)
+                await asyncio.sleep(1)
                 if i == 0:
                     await message.reply(part)
                 else:
@@ -109,23 +120,14 @@ async def on_message(client, message):
     if ai_input:
         response = await get_ai_response(ai_input, user_id)
         if response:
-            responses = split_message(response.text)
+            responses = split_message(response)
             for i, part in enumerate(responses):
-                typing_duration = min(max(1, len(part) // 10), 5)
-                await asyncio.sleep(typing_duration)
+                await send_typing_message(client, chat_id, part)
+                await asyncio.sleep(1)
                 if i == 0:
                     await message.reply(part)
                 else:
                     await client.send_message(chat_id, part)
-    current_time = time.time()
-    if current_time - last_gif_time > gif_cooldown:
-        gif_url = await get_random_gif()
-        if gif_url:
-            try:
-                await client.send_animation(chat_id, gif_url)
-                last_gif_time = current_time
-            except Exception as e:
-                print({e})
 
 
 app.run()
