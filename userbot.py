@@ -8,7 +8,7 @@ from pyrogram import Client, filters, enums
 import tgcrypto
 import aiohttp
 
-# https://docs.kram.cat/auth.html
+# https://docs.kram.cat/auth.html 
 cai_token = "ваш_чарактер_аи_токен"
 chat_id_characterai = "3b9jNbV9sxbILv6uGzqw-YyUIPHX06mSAR61Dk5bzPo"
 # кстати всё ещё не понимаю зачем для ботов задавать апи ид и апи хеш
